@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Кринж-судья</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;900&family=Manrope:wght@500;700&display=swap">
+<style>
+:root{--bg:#ffe4f1;--ink:#2a0b3b;--hot:#ff3b5c;--card:#fff;--mute:#7a5a8c;box-sizing:border-box}
+*{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.4 Manrope,system-ui,sans-serif}
+#app{max-width:520px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font:900 24px/1 Unbounded,Impact,sans-serif;margin:0}
+#me{background:none;border:2px solid var(--ink);border-radius:99px;padding:6px 12px;font:inherit;color:var(--ink);cursor:pointer}
+nav{display:flex;gap:8px;margin:16px 0}
+nav button{flex:1;padding:10px;border:2px solid var(--ink);border-radius:12px;background:none;font:700 15px Manrope,sans-serif;color:var(--ink);cursor:pointer}
+nav button.on{background:var(--ink);color:#fff}
+.q{font:700 18px Unbounded,sans-serif;text-align:center;margin:8px 0 14px}
+.card{position:relative;display:block;width:100%;background:var(--card);border:3px solid var(--ink);border-radius:20px;padding:22px 16px;text-align:center;font:inherit;color:var(--ink);cursor:pointer;box-shadow:5px 5px 0 var(--ink)}
+.card:active:not(:disabled){transform:translate(3px,3px);box-shadow:2px 2px 0 var(--ink)}
+.card:disabled{cursor:default}
+.card .e{font-size:44px;display:block}
+.card .n{font:700 20px Unbounded,sans-serif;display:block;margin-top:6px}
+.card .d{display:block;margin-top:8px;color:var(--mute);font-weight:700}
+.card.win{background:var(--hot);color:#fff}
+.card.win .d{color:#fff}
+.card.win::after{content:"ТВОЙ ВЫБОР";position:absolute;top:-12px;right:-6px;background:#fff;color:var(--hot);border:3px solid var(--hot);border-radius:8px;padding:2px 8px;font:900 12px Unbounded,sans-serif;transform:rotate(6deg)}
+.card.lose{opacity:.55}
+.vs{text-align:center;font:900 14px Unbounded,sans-serif;margin:12px 0}
+.act{text-align:center;margin-top:18px}
+.act button{background:var(--ink);color:#fff;border:0;border-radius:12px;padding:12px 24px;font:700 16px Manrope,sans-serif;cursor:pointer}
+.act .skip{background:none;color:var(--mute);text-decoration:underline}
+.row{display:grid;grid-template-columns:28px 1fr auto 56px;gap:8px;align-items:center;padding:10px 0;border-bottom:2px solid rgba(42,11,59,.15)}
+.row b{font:900 14px Unbounded,sans-serif}
+.row small{color:var(--mute)}
+.row em{font:900 17px Unbounded,sans-serif;font-style:normal;text-align:right;color:var(--hot)}
+.hint,.err{text-align:center;color:var(--mute);font-size:14px}
+.err{color:var(--hot);font-weight:700}
+#ov{position:fixed;inset:0;background:rgba(42,11,59,.8);display:flex;align-items:center;justify-content:center;padding:16px}
+#ov form{background:#fff;border:3px solid var(--ink);border-radius:20px;padding:20px;width:100%;max-width:360px}
+#ov input{width:100%;padding:12px;border:2px solid var(--ink);border-radius:10px;font:inherit;margin:12px 0}
+#ov button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--hot);color:#fff;font:700 16px Manrope,sans-serif;cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1>Кринж-судья</h1><button id="me"></button></header>
+  <nav><button data-t="v" class="on">Голосовать</button><button data-t="r">Рейтинг</button></nav>
+  <section id="v"></section>
+  <section id="r" hidden></section>
+  <p class="hint" id="mode"></p>
+</div>
+<div id="ov" hidden><form id="nf"><b>Как тебя зовут?</b><input id="ni" maxlength="20" placeholder="Ник" autocomplete="off"><button>Поехали</button></form></div>
+
+<script type="module">
+// Конфиг Firebase. Если поставить null — всё будет храниться локально в браузере.
+const CFG = {
+  apiKey: "AIzaSyAF2Gw9x44SdJBzq3D3n4FcrRcTkGiRaq8",
+  authDomain: "hobbies-9f3d0.firebaseapp.com",
+  projectId: "hobbies-9f3d0",
+  storageBucket: "hobbies-9f3d0.firebasestorage.app",
+  messagingSenderId: "734821700828",
+  appId: "1:734821700828:web:62c2d196de21aa9bcad019"
+};
+
+const H=[["Паркур","🤸"],["Битбокс","🎤"],["Брейк-данс","🕺"],["Моноколесо","🎡"],["Хоббихорсинг","🐴"],["Макраме","🧶"],["Игра на банджо","🪕"],["Жонглирование","🤹"],["Йо-йо","🪀"],["Фингербординг","🛹"],["Варган","🎶"],["Пенспининг","🖊️"],["Реконструкция средневековых боев","⚔️"],["Метание ножей","🔪"],["Спидкубинг","🧩"],["Роллер дерби","🛼"],["Аниме","🍥"],["Ходьба на ходулях","🦩"],["Плетение кольчуги","⛓️"],["Пение йодлем","🏔️"],["Чемпионаты по камень-ножницы-бумага","✂️"],["Тверк","🍑"],["Пейнтбол","🎯"],["Баттл рэп","🎙️"],["Муравьиная ферма","🐜"],["Фурри косплей","🦊"],["Спортивный свист","😗"],["Сигвей","🛴"],["Нунчаки","🥋"],["Армрестлинг","💪"],["Фокусы с картами","🃏"]];
+
+const K=32, M=5, $=s=>document.querySelector(s);
+const def=x=>x||{e:1000,n:0};
+let nick=localStorage.kdn||"", last="", busy=false, store;
+
+function calc(a,b){ // a — выбрали, b — не выбрали
+  a=def(a);b=def(b);
+  const d=Math.round(K*(1-1/(1+10**((b.e-a.e)/400))));
+  return{a:{e:a.e+d,n:a.n+1},b:{e:b.e-d,n:b.n+1},d,a0:a.e,b0:b.e};
+}
+
+const local={
+  async all(){return JSON.parse(localStorage.kd||"{}")},
+  async vote(w,l){const d=JSON.parse(localStorage.kd||"{}");const r=calc(d[w],d[l]);d[w]=r.a;d[l]=r.b;localStorage.kd=JSON.stringify(d);return r}
+};
+
+async function remote(){
+  const A=await import("https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js");
+  const F=await import("https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js");
+  const db=F.getFirestore(A.initializeApp(CFG));
+  return{
+    async all(){const s=await F.getDocs(F.collection(db,"hobbies"));const o={};s.forEach(x=>o[x.id]=x.data());return o},
+    async vote(w,l){
+      const r=await F.runTransaction(db,async t=>{
+        const rw=F.doc(db,"hobbies",w),rl=F.doc(db,"hobbies",l);
+        const [a,b]=await Promise.all([t.get(rw),t.get(rl)]);
+        const r=calc(a.data(),b.data());t.set(rw,r.a);t.set(rl,r.b);return r;
+      });
+      F.addDoc(F.collection(db,"votes"),{nick,w,l,t:Date.now()}).catch(()=>{});
+      return r;
+    }
+  };
+}
+
+function pick(){
+  let a,b,k;
+  do{a=H[Math.random()*H.length|0];b=H[Math.random()*H.length|0];k=[a[0],b[0]].sort().join()}while(a===b||k===last);
+  last=k;return[a,b];
+}
+const card=(h,i,x="",dis="")=>`<button class="card ${x}" data-i="${i}" ${dis}><span class="e">${h[1]}</span><span class="n">${h[0]}</span><span class="d">${dis?"":"Нажми, чтобы выбрать"}</span></button>`;
+
+let pair;
+function show(err=""){
+  busy=false;pair=pick();
+  $("#v").innerHTML=`<p class="q">Что выберешь?</p>${card(pair[0],0)}<div class="vs">VS</div>${card(pair[1],1)}${err?`<p class="err">${err}</p>`:""}<div class="act"><button class="skip" id="sk">Другая пара</button></div>`;
+  $("#sk").onclick=()=>show();
+}
+
+$("#v").addEventListener("click",async ev=>{
+  const c=ev.target.closest(".card[data-i]");
+  if(!c||busy)return;busy=true;
+  const wi=+c.dataset.i, w=pair[wi], l=pair[1-wi];
+  try{
+    const r=await store.vote(w[0],l[0]);
+    const sg=n=>n>0?"+"+n:n;
+    const reveal=(h,x,o,nw,d)=>card(h,0,x,"disabled").replace(/<span class="d">.*?<\/span>/,`<span class="d">${o} → ${nw} (${sg(d)})</span>`);
+    const wc=reveal(w,"win",r.a0,r.a.e,r.d), lc=reveal(l,"lose",r.b0,r.b.e,-r.d);
+    $("#v").innerHTML=`<p class="q">Выбор сделан</p>${wi===0?wc:lc}<div class="vs">VS</div>${wi===0?lc:wc}<div class="act"><button id="nx">Дальше</button></div>`;
+    $("#nx").onclick=()=>show();
+  }catch(e){console.error(e);show("Не удалось сохранить голос. Попробуй ещё раз.")}
+});
+
+async function board(){
+  $("#r").innerHTML=`<p class="hint">Чем выше рейтинг, тем меньше кринжа. Рейтинг сглажен: хобби с малым числом голосов тянется к 1000.</p>`;
+  try{
+    const d=await store.all();
+    const rows=H.map(([n,e])=>{const x=def(d[n]);return{n,e,v:x.n,s:(x.e*x.n+1000*M)/(x.n+M)}}).sort((a,b)=>b.s-a.s);
+    $("#r").innerHTML+=rows.map((r,i)=>`<div class="row"><b>${i+1}</b><span>${r.e} ${r.n}</span><small>${r.v} гол.</small><em>${Math.round(r.s)}</em></div>`).join("");
+  }catch(e){console.error(e);$("#r").innerHTML+=`<p class="err">Не удалось загрузить рейтинг.</p>`}
+}
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  $("#v").hidden=b.dataset.t!=="v";$("#r").hidden=b.dataset.t!=="r";
+  if(b.dataset.t==="r")board();
+});
+
+const setNick=()=>{$("#me").textContent=nick||"Ник"};
+$("#me").onclick=()=>{$("#ni").value=nick;$("#ov").hidden=false;$("#ni").focus()};
+$("#nf").onsubmit=e=>{e.preventDefault();const v=$("#ni").value.trim();if(!v)return;nick=v;localStorage.kdn=v;setNick();$("#ov").hidden=true};
+
+setNick();
+if(!nick)$("#ov").hidden=false;
+let fe="";
+try{store=CFG?await remote():local}catch(e){console.error(e);fe=e.message||String(e);store=local}
+$("#mode").textContent=store!==local?"":CFG?"Нет связи с Firebase, голоса хранятся только в этом браузере. Причина: "+fe:"Локальный режим: голоса хранятся только в этом браузере.";
+show();
+</script>
+</body>
+</html>
