@@ -98,6 +98,17 @@ nav button{padding:8px 2px}
 #pick .act{margin-top:6px;padding:6px 0}
 #pick .act button{padding:9px 20px;font-size:15px}
 #pick .act .skip{padding:4px 10px;font-size:13px}
+#ce{flex-basis:100%;margin:0;font-size:12px;text-align:left}
+#ce:empty{display:none}
+.lk{color:var(--hot);cursor:pointer;text-decoration:underline;font-weight:700}
+.fc .lk{font-size:12px}
+.rp{margin:8px 0 0 8px;padding-left:8px;border-left:3px solid var(--hot)}
+.rp .fc{margin:6px 0 0;background:#fff8fb}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:6px 4px;border:2px solid var(--ink);border-radius:10px;background:none;font:700 12px Manrope,sans-serif;color:var(--ink);cursor:pointer}
+.seg button.on{background:var(--ink);color:#fff}
+.seg button:disabled{opacity:.4;cursor:default}
+.cc{font-size:12px;color:var(--mute);margin-top:4px}
 [hidden]{display:none!important}
 :focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </style>
@@ -106,7 +117,7 @@ nav button{padding:8px 2px}
 <div id="app">
   <header><h1>Битбокс или паркур?</h1><button id="me"></button></header>
   <nav><button data-t="v" class="on">Голосовать</button><button data-t="r">Рейтинг</button><button data-t="m">Мой топ</button></nav>
-  <section id="v"><div class="pane" id="pick"></div><div class="pane" id="feedp"><h2>Лента мнений</h2><div id="cf"><div id="cx"></div><textarea id="ct" maxlength="300" placeholder="Твоё мнение об этой паре и выборе"></textarea><div class="act"><button class="sm" id="cs">Отправить</button></div></div><div id="fl"></div></div></section>
+  <section id="v"><div class="pane" id="pick"></div><div class="pane" id="feedp"><h2>Лента мнений</h2><div id="cf"><div id="cx"></div><textarea id="ct" maxlength="300" placeholder="Твоё сообщение (до 300 символов)"></textarea><div class="act"><button class="sm" id="cs">Отправить</button></div><p class="err" id="ce"></p></div><div id="fl"></div></div></section>
   <section id="r" hidden></section>
   <section id="m" hidden></section>
   <p class="hint" id="mode"></p>
@@ -135,7 +146,7 @@ const who=by=>{
 };
 const K=32, M=5, $=s=>document.querySelector(s);
 const def=x=>x||{e:1000,n:0};
-let nick="", cur=null, busy=false, store, mine=[], seen=new Set(), exp={}, skip=new Set();
+let nick="", cur=null, reply=null, free=false, fd=[], gn={}, gt=0, busy=false, store, mine=[], seen=new Set(), exp={}, skip=new Set();
 
 function calc(a,b){ // a — выбрали, b — не выбрали
   a=def(a);b=def(b);
@@ -151,8 +162,8 @@ const local={
     const v=JSON.parse(localStorage.kdv||"[]");v.push({nick,w,l,t:Date.now()});localStorage.kdv=JSON.stringify(v);return r;
   },
   async myVotes(){return JSON.parse(localStorage.kdv||"[]")},
-  async addComment(c){const a=JSON.parse(localStorage.kdc||"[]");a.push(c);localStorage.kdc=JSON.stringify(a)},
-  async feed(){return JSON.parse(localStorage.kdc||"[]").sort((a,b)=>b.t-a.t).slice(0,50)}
+  async addComment(c){const a=JSON.parse(localStorage.kdc||"[]");a.push({...c,id:"l"+Date.now()+Math.random().toString(36).slice(2)});localStorage.kdc=JSON.stringify(a)},
+  async feed(){return JSON.parse(localStorage.kdc||"[]").sort((a,b)=>b.t-a.t).slice(0,100)}
 };
 
 async function remote(){
@@ -182,21 +193,22 @@ async function remote(){
       return (await F.getDocs(q)).docs.map(x=>x.data());
     },
     async addComment(c){await F.addDoc(F.collection(db,"comments"),{...c,uid:au.currentUser?.uid||""})},
-    async feed(){return (await F.getDocs(F.query(F.collection(db,"comments"),F.orderBy("t","desc"),F.limit(50)))).docs.map(x=>x.data())}
+    async feed(){return (await F.getDocs(F.query(F.collection(db,"comments"),F.orderBy("t","desc"),F.limit(100)))).docs.map(x=>({...x.data(),id:x.id}))}
   };
 }
 
 const key=(a,b)=>[a,b].sort().join("|");
 const shuf=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(p=>p[1]);
 const reg=v=>{mine.push(v);seen.add(key(v.w,v.l));exp[v.w]=(exp[v.w]||0)+1;exp[v.l]=(exp[v.l]||0)+1};
+async function loadGn(){gt=Date.now();try{const d=await store.all();for(const k in d)gn[k]=d[k].n||0}catch(e){console.error(e)}}
 async function loadMine(){
-  mine=[];seen=new Set();exp={};
+  mine=[];seen=new Set();exp={};await loadGn();
   try{const a=await store.myVotes();a.sort((x,y)=>x.t-y.t);a.forEach(reg)}catch(e){console.error(e)}
 }
 // Пары не повторяются, а хобби, которые человек видел реже всего, показываются первыми:
 // так один любитель ножей и битбокса не перекашивает рейтинг, а аниме тоже получает свои пары.
 function pick(retry=1){
-  const by=(x,y)=>(exp[x[0]]||0)-(exp[y[0]]||0);
+  const by=(x,y)=>(gn[x[0]]||0)-(gn[y[0]]||0)||(exp[x[0]]||0)-(exp[y[0]]||0);
   for(const a of shuf(H).sort(by)){
     const b=shuf(H).sort(by).find(b=>b!==a&&!seen.has(key(a[0],b[0]))&&!skip.has(key(a[0],b[0])));
     if(b)return Math.random()<.5?[a,b]:[b,a];
@@ -208,6 +220,7 @@ const card=(h,i,x="",dis="")=>`<button class="card ${x}" data-i="${i}" ${dis}><s
 
 let pair;
 function show(err=""){
+  if(Date.now()-gt>20000)loadGn();
   busy=false;pair=pick();
   cur=pair?{a:pair[0][0],b:pair[1][0],w:""}:null;ctx();
   if(!pair){$("#pick").innerHTML=`<p class="q">Ты прошёл все пары 🎉</p><p class="hint">Загляни в «Мой топ» и в ленту.</p>`;return}
@@ -221,7 +234,7 @@ $("#v").addEventListener("click",async ev=>{
   const wi=+c.dataset.i, w=pair[wi], l=pair[1-wi];
   try{
     const r=await store.vote(w[0],l[0]);
-    reg({w:w[0],l:l[0],t:Date.now()});
+    reg({w:w[0],l:l[0],t:Date.now()});gn[w[0]]=r.a.n;gn[l[0]]=r.b.n;
     cur.w=w[0];ctx();
     const sg=n=>n>0?"+"+n:n;
     const reveal=(h,x,o,nw,d)=>card(h,0,x,"disabled").replace(/<span class="d">.*?<\/span>/,`<span class="d">${o} → ${nw} (${sg(d)})</span>`);
@@ -240,19 +253,42 @@ async function board(){
   }catch(e){console.error(e);$("#r").innerHTML+=`<p class="err">Не удалось загрузить рейтинг.</p>`}
 }
 
-function ctx(){$("#cx").innerHTML=cur?`Пара: ${E[cur.a]} ${esc(cur.a)} <i>vs</i> ${E[cur.b]} ${esc(cur.b)}${cur.w?` · твой выбор: ${esc(cur.w)}`:""}`:"Все пары пройдены"}
+function ctx(){
+  const f=free||!cur;
+  $("#cx").innerHTML=reply
+    ?`Ответ для <b>${esc(reply.nick)}</b>: «${esc(reply.text)}» <a class="lk" id="rx">отмена</a>`
+    :`<div class="seg"><button type="button" id="m1" class="${f?"":"on"}" ${cur?"":"disabled"}>Комментарий к паре</button><button type="button" id="m2" class="${f?"on":""}">Сообщение в чат</button></div><div class="cc">${f?"Без привязки к паре":`${E[cur.a]} ${esc(cur.a)} <i>vs</i> ${E[cur.b]} ${esc(cur.b)}${cur.w?` · твой выбор: ${esc(cur.w)}`:""}`}</div>`;
+}
+$("#cx").onclick=e=>{const i=e.target.id;if(i==="rx")reply=null;else if(i==="m1")free=false;else if(i==="m2")free=true;else return;ctx()};
 
 async function feed(){
   try{
-    const a=await store.feed();
-    $("#fl").innerHTML=a.length?a.map(c=>{const A=c.a||c.w,B=c.b||c.l;return`<div class="fc"><div class="pr">${E[A]||""} ${esc(A)} <i>vs</i> ${E[B]||""} ${esc(B)}</div><b>${esc(c.nick)}</b>${c.w?` выбрал(а): ${esc(c.w)}`:" · до выбора"}<p>${esc(c.text)}</p><small>${new Date(c.t).toLocaleString("ru-RU",{dateStyle:"short",timeStyle:"short"})}</small></div>`}).join(""):`<p class="hint">Пока пусто. Напиши первое мнение.</p>`;
-  }catch(e){console.error(e);$("#fl").innerHTML=`<p class="err">Не удалось загрузить ленту.</p>`}
+    fd=await store.feed();
+    const ids=new Set(fd.map(c=>c.id)),kids={};
+    fd.forEach(c=>{if(c.re&&ids.has(c.re))(kids[c.re]=kids[c.re]||[]).push(c)});
+    const dt=c=>new Date(c.t).toLocaleString("ru-RU",{dateStyle:"short",timeStyle:"short"});
+    const card=c=>{
+      const A=c.a||c.w,B=c.b||c.l;
+      const head=A?`${E[A]||""} ${esc(A)} <i>vs</i> ${E[B]||""} ${esc(B)}`:c.re?"Ответ":"Сообщение в чат";
+      return`<div class="fc"><div class="pr">${head}</div><b>${esc(c.nick)}</b>${A?(c.w?` выбрал(а): ${esc(c.w)}`:" · до выбора"):""}<p>${esc(c.text)}</p><small>${dt(c)} · <a class="lk" data-r="${esc(c.id)}">Ответить</a></small>${(kids[c.id]||[]).sort((x,y)=>x.t-y.t).map(k=>`<div class="rp">${card(k)}</div>`).join("")}</div>`;
+    };
+    const top=fd.filter(c=>!(c.re&&ids.has(c.re)));
+    $("#fl").innerHTML=top.length?top.map(card).join(""):`<p class="hint">Пока пусто. Напиши первое мнение.</p>`;
+  }catch(e){console.error(e);$("#fl").innerHTML=`<p class="err">Не удалось загрузить ленту (${esc(e.code||e.message)}).</p>`}
 }
 
+$("#fl").onclick=e=>{ // «Ответить»: ответы всегда крепятся к исходному мнению ветки
+  const id=e.target.dataset.r;if(!id)return;
+  const c=fd.find(x=>x.id===id);if(!c)return;
+  reply={id:c.re&&fd.some(x=>x.id===c.re)?c.re:c.id,nick:c.nick,text:c.text.slice(0,40)+(c.text.length>40?"…":"")};
+  ctx();$("#ct").focus();
+};
+
 $("#cs").onclick=async()=>{
-  const text=$("#ct").value.trim();if(!text||!cur)return;$("#cs").disabled=true;
-  try{await store.addComment({nick,a:cur.a,b:cur.b,w:cur.w,text,t:Date.now()});$("#ct").value="";$("#cs").textContent="Отправлено ✓";feed()}
-  catch(e){console.error(e);$("#cs").textContent="Ошибка"}
+  const text=$("#ct").value.trim();if(!text)return;$("#cs").disabled=true;
+  const c=reply?{re:reply.id,a:"",b:"",w:""}:free||!cur?{a:"",b:"",w:""}:{a:cur.a,b:cur.b,w:cur.w};
+  try{await store.addComment({nick,...c,text,t:Date.now()});$("#ct").value="";$("#ce").textContent="";reply=null;ctx();$("#cs").textContent="Отправлено ✓";feed()}
+  catch(e){console.error(e);$("#ce").textContent="Не отправилось: "+(e.code||e.message)}
   $("#cs").disabled=false;setTimeout(()=>$("#cs").textContent="Отправить",2000);
 };
 
