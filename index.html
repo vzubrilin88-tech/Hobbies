@@ -42,6 +42,29 @@ nav button.on{background:var(--ink);color:#fff}
 #ov .box{background:#fff;border:3px solid var(--ink);border-radius:20px;padding:20px;width:100%;max-width:360px}
 #ov p{margin:10px 0}
 #ov button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--hot);color:#fff;font:700 16px Manrope,sans-serif;cursor:pointer}
+nav button{padding:10px 2px;font-size:13px}
+textarea{width:100%;min-height:70px;padding:10px;border:2px solid var(--ink);border-radius:12px;font:inherit;margin-top:16px;resize:vertical}
+.fc{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:12px;margin-bottom:10px}
+.fc p{margin:6px 0 4px}
+.fc small{color:var(--mute)}
+.act .sm{padding:8px 16px;font-size:14px;margin-top:8px}
+html,body{height:100%}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column}
+#v{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+#r,#m{flex:1;min-height:0;overflow:auto}
+#mode:empty{display:none}
+.pane{flex:1 1 0;min-height:0;overflow:auto;border:3px solid var(--ink);border-radius:18px;background:rgba(255,255,255,.5);padding:16px 12px 12px}
+.pane h2{font:900 12px Unbounded,sans-serif;margin:0 0 10px;letter-spacing:.04em;text-transform:uppercase}
+.pair{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.pair .card{padding:12px 8px}
+.pair .card .e{font-size:32px}
+.pair .card .n{font-size:14px}
+.pair .vs{margin:0}
+.q{margin:0 0 12px;font-size:16px}
+.act{display:flex;gap:8px;justify-content:center}
+.act .sm{margin-top:0}
+textarea{min-height:56px}
+@media(min-width:820px){#app{max-width:980px}#v{flex-direction:row}}
 [hidden]{display:none!important}
 :focus-visible{outline:3px solid var(--hot);outline-offset:2px}
 </style>
@@ -49,9 +72,10 @@ nav button.on{background:var(--ink);color:#fff}
 <body>
 <div id="app">
   <header><h1>Битбокс или паркур?</h1><button id="me"></button></header>
-  <nav><button data-t="v" class="on">Голосовать</button><button data-t="r">Рейтинг</button></nav>
-  <section id="v"></section>
+  <nav><button data-t="v" class="on">Голосовать</button><button data-t="r">Рейтинг</button><button data-t="m">Мой топ</button></nav>
+  <section id="v"><div class="pane" id="pick"></div><div class="pane" id="feedp"></div></section>
   <section id="r" hidden></section>
+  <section id="m" hidden></section>
   <p class="hint" id="mode"></p>
 </div>
 <div id="ov" hidden><div class="box"><b>Битбокс или паркур?</b><p>Чтобы голосовать, войди через Google. Имя берётся из аккаунта, поэтому дублей не будет.</p><button id="gi">Войти через Google</button><p class="err" id="ge"></p></div></div>
@@ -69,6 +93,7 @@ const CFG = {
 
 const H=[["Паркур","🤸"],["Битбокс","🎤"],["Брейк-данс","🕺"],["Моноколесо","🎡"],["Хоббихорсинг","🐴"],["Макраме","🧶"],["Игра на банджо","🪕"],["Жонглирование","🤹"],["Йо-йо","🪀"],["Фингербординг","🛹"],["Варган","🎶"],["Пенспининг","🖊️"],["Реконструкция средневековых боев","⚔️"],["Метание ножей","🔪"],["Спидкубинг","🧩"],["Роллер дерби","🛼"],["Аниме","🍥"],["Ходьба на ходулях","🦩"],["Плетение кольчуги","⛓️"],["Пение йодлем","🏔️"],["Чемпионаты по камень-ножницы-бумага","✂️"],["Тверк","🍑"],["Пейнтбол","🎯"],["Баттл рэп","🎙️"],["Муравьиная ферма","🐜"],["Фурри косплей","🦊"],["Спортивный свист","😗"],["Сигвей","🛴"],["Нунчаки","🥋"],["Армрестлинг","💪"],["Фокусы с картами","🃏"]];
 
+const E=Object.fromEntries(H);
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const who=by=>{
   const a=Object.entries(by||{}).sort((x,y)=>y[1]-x[1]);if(!a.length)return"";
@@ -77,7 +102,7 @@ const who=by=>{
 };
 const K=32, M=5, $=s=>document.querySelector(s);
 const def=x=>x||{e:1000,n:0};
-let nick="", last="", busy=false, store;
+let nick="", busy=false, store, mine=[], seen=new Set(), exp={}, skip=new Set();
 
 function calc(a,b){ // a — выбрали, b — не выбрали
   a=def(a);b=def(b);
@@ -88,7 +113,13 @@ function calc(a,b){ // a — выбрали, b — не выбрали
 
 const local={
   async all(){return JSON.parse(localStorage.kd||"{}")},
-  async vote(w,l){const d=JSON.parse(localStorage.kd||"{}");const r=calc(d[w],d[l]);d[w]=r.a;d[l]=r.b;localStorage.kd=JSON.stringify(d);return r}
+  async vote(w,l){
+    const d=JSON.parse(localStorage.kd||"{}");const r=calc(d[w],d[l]);d[w]=r.a;d[l]=r.b;localStorage.kd=JSON.stringify(d);
+    const v=JSON.parse(localStorage.kdv||"[]");v.push({nick,w,l,t:Date.now()});localStorage.kdv=JSON.stringify(v);return r;
+  },
+  async myVotes(){return JSON.parse(localStorage.kdv||"[]")},
+  async addComment(c){const a=JSON.parse(localStorage.kdc||"[]");a.push(c);localStorage.kdc=JSON.stringify(a)},
+  async feed(){return JSON.parse(localStorage.kdc||"[]").sort((a,b)=>b.t-a.t).slice(0,50)}
 };
 
 async function remote(){
@@ -111,22 +142,43 @@ async function remote(){
       });
       F.addDoc(F.collection(db,"votes"),{nick,uid:au.currentUser?.uid||"",w,l,t:Date.now()}).catch(()=>{});
       return r;
-    }
+    },
+    async myVotes(){ // все мои голоса из журнала: по uid и по старому нику
+      const u=au.currentUser;if(!u)return[];
+      const q=F.query(F.collection(db,"votes"),F.or(F.where("uid","==",u.uid),F.where("nick","==",nick)));
+      return (await F.getDocs(q)).docs.map(x=>x.data());
+    },
+    async addComment(c){await F.addDoc(F.collection(db,"comments"),{...c,uid:au.currentUser?.uid||""})},
+    async feed(){return (await F.getDocs(F.query(F.collection(db,"comments"),F.orderBy("t","desc"),F.limit(50)))).docs.map(x=>x.data())}
   };
 }
 
-function pick(){
-  let a,b,k;
-  do{a=H[Math.random()*H.length|0];b=H[Math.random()*H.length|0];k=[a[0],b[0]].sort().join()}while(a===b||k===last);
-  last=k;return[a,b];
+const key=(a,b)=>[a,b].sort().join("|");
+const shuf=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(p=>p[1]);
+const reg=v=>{mine.push(v);seen.add(key(v.w,v.l));exp[v.w]=(exp[v.w]||0)+1;exp[v.l]=(exp[v.l]||0)+1};
+async function loadMine(){
+  mine=[];seen=new Set();exp={};
+  try{const a=await store.myVotes();a.sort((x,y)=>x.t-y.t);a.forEach(reg)}catch(e){console.error(e)}
+}
+// Пары не повторяются, а хобби, которые человек видел реже всего, показываются первыми:
+// так один любитель ножей и битбокса не перекашивает рейтинг, а аниме тоже получает свои пары.
+function pick(retry=1){
+  const by=(x,y)=>(exp[x[0]]||0)-(exp[y[0]]||0);
+  for(const a of shuf(H).sort(by)){
+    const b=shuf(H).sort(by).find(b=>b!==a&&!seen.has(key(a[0],b[0]))&&!skip.has(key(a[0],b[0])));
+    if(b)return Math.random()<.5?[a,b]:[b,a];
+  }
+  if(retry&&skip.size){skip.clear();return pick(0)}
+  return null;
 }
 const card=(h,i,x="",dis="")=>`<button class="card ${x}" data-i="${i}" ${dis}><span class="e">${h[1]}</span><span class="n">${h[0]}</span><span class="d">${dis?"":"Нажми, чтобы выбрать"}</span></button>`;
 
 let pair;
 function show(err=""){
   busy=false;pair=pick();
-  $("#v").innerHTML=`<p class="q">Что выберешь?</p>${card(pair[0],0)}<div class="vs">VS</div>${card(pair[1],1)}${err?`<p class="err">${err}</p>`:""}<div class="act"><button class="skip" id="sk">Другая пара</button></div>`;
-  $("#sk").onclick=()=>show();
+  if(!pair){$("#pick").innerHTML=`<p class="q">Ты прошёл все пары 🎉</p><p class="hint">Загляни в «Мой топ» и в ленту.</p>`;return}
+  $("#pick").innerHTML=`<p class="q">Что выберешь?</p><div class="pair">${card(pair[0],0)}<div class="vs">VS</div>${card(pair[1],1)}</div>${err?`<p class="err">${err}</p>`:""}<div class="act"><button class="skip" id="sk">Другая пара</button></div>`;
+  $("#sk").onclick=()=>{skip.add(key(pair[0][0],pair[1][0]));show()};
 }
 
 $("#v").addEventListener("click",async ev=>{
@@ -135,11 +187,17 @@ $("#v").addEventListener("click",async ev=>{
   const wi=+c.dataset.i, w=pair[wi], l=pair[1-wi];
   try{
     const r=await store.vote(w[0],l[0]);
+    reg({w:w[0],l:l[0],t:Date.now()});
     const sg=n=>n>0?"+"+n:n;
     const reveal=(h,x,o,nw,d)=>card(h,0,x,"disabled").replace(/<span class="d">.*?<\/span>/,`<span class="d">${o} → ${nw} (${sg(d)})</span>`);
     const wc=reveal(w,"win",r.a0,r.a.e,r.d), lc=reveal(l,"lose",r.b0,r.b.e,-r.d);
-    $("#v").innerHTML=`<p class="q">Выбор сделан</p>${wi===0?wc:lc}<div class="vs">VS</div>${wi===0?lc:wc}<div class="act"><button id="nx">Дальше</button></div>`;
+    $("#pick").innerHTML=`<p class="q">Выбор сделан</p><div class="pair">${wi===0?wc:lc}<div class="vs">VS</div>${wi===0?lc:wc}</div><textarea id="ct" maxlength="300" placeholder="Мнение об этой паре и выборе: попадёт в ленту (необязательно)"></textarea><div class="act"><button class="sm" id="cs">В ленту</button><button id="nx">Дальше</button></div>`;
     $("#nx").onclick=()=>show();
+    $("#cs").onclick=async()=>{
+      const text=$("#ct").value.trim();if(!text)return;$("#cs").disabled=true;
+      try{await store.addComment({nick,w:w[0],l:l[0],text,t:Date.now()});$("#ct").value="";$("#cs").textContent="Отправлено ✓";feed()}
+      catch(e){console.error(e);$("#cs").disabled=false;$("#cs").textContent="Ошибка, ещё раз"}
+    };
   }catch(e){console.error(e);show("Не удалось сохранить голос. Попробуй ещё раз.")}
 });
 
@@ -152,10 +210,26 @@ async function board(){
   }catch(e){console.error(e);$("#r").innerHTML+=`<p class="err">Не удалось загрузить рейтинг.</p>`}
 }
 
+async function feed(){
+  $("#feedp").innerHTML=`<h2>Лента мнений</h2>`;
+  try{
+    const a=await store.feed();
+    $("#feedp").innerHTML+=a.length?a.map(c=>`<div class="fc"><b>${esc(c.nick)}</b> выбрал(а) ${E[c.w]||""} ${esc(c.w)} вместо ${E[c.l]||""} ${esc(c.l)}<p>${esc(c.text)}</p><small>${new Date(c.t).toLocaleString("ru-RU",{dateStyle:"short",timeStyle:"short"})}</small></div>`).join(""):`<p class="hint">Пока пусто. Напиши первое мнение после голосования.</p>`;
+  }catch(e){console.error(e);$("#feedp").innerHTML+=`<p class="err">Не удалось загрузить ленту.</p>`}
+}
+
+function myBoard(){ // личный ELO: те же формулы, но по моим голосам в порядке времени
+  const d={};
+  for(const v of mine){const r=calc(d[v.w],d[v.l]);d[v.w]={e:r.a.e,n:r.a.n,k:(d[v.w]?.k||0)+1};d[v.l]={e:r.b.e,n:r.b.n,k:d[v.l]?.k||0}}
+  const rows=H.map(([n,e])=>{const x=d[n]||{e:1000,n:0,k:0};return{n,e,x,s:(x.e*x.n+1000*M)/(x.n+M)}}).sort((a,b)=>b.s-a.s);
+  $("#m").innerHTML=`<p class="hint">Только твои выборы: ${mine.length} из ${H.length*(H.length-1)/2} пар. Чем выше, тем меньше кринжа.</p>`+rows.map((r,i)=>`<div class="row"><b>${i+1}</b><span>${r.e} ${r.n}</span><small>${r.x.n?`выбрал ${r.x.k} из ${r.x.n}`:"не попадалось"}</small><em>${Math.round(r.s)}</em></div>`).join("");
+}
+
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
-  $("#v").hidden=b.dataset.t!=="v";$("#r").hidden=b.dataset.t!=="r";
-  if(b.dataset.t==="r")board();
+  const t=b.dataset.t;
+  ["v","r","m"].forEach(k=>$("#"+k).hidden=k!==t);
+  ({r:board,m:myBoard})[t]?.();
 });
 
 const setNick=()=>{$("#me").textContent=nick||"Войти"};
@@ -171,11 +245,11 @@ if(store.auth){
   };
   $("#me").onclick=()=>{if(nick&&confirm("Выйти из аккаунта?"))store.auth.signOut()};
   store.auth.onChange(u=>{
-    if(u){nick=u.displayName||(u.email||"").split("@")[0]||"Аноним";$("#ov").hidden=true;setNick();show()}
-    else{nick="";setNick();$("#v").innerHTML="";$("#ov").hidden=false}
+    if(u){nick=u.displayName||(u.email||"").split("@")[0]||"Аноним";$("#ov").hidden=true;setNick();loadMine().then(()=>{show();feed()})}
+    else{nick="";mine=[];setNick();$("#pick").innerHTML="";$("#feedp").innerHTML="";$("#ov").hidden=false}
   });
 }else{
-  nick="Гость";setNick();show();
+  nick="Гость";setNick();loadMine().then(()=>{show();feed()});
 }
 </script>
 </body>
